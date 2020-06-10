@@ -29,6 +29,10 @@ var models = new Map();
 
 var selected = null;
 var lbm = false;
+var crossedObj = null;
+
+var pastPos = new THREE.Vector3(0,0,0);
+var intersectionObj = false;
 
 // Функции инициализации и изменения объектов
 init();
@@ -290,18 +294,21 @@ function onDocumentMouseDown(event)
         {
             if (selected != null)
             {
+                pastPos.copy(selected.position);
                 selected.userData.cube.material.visible = false;
                 selected = intersects[0].object.userData.model;
                 selected.userData.cube.material.visible = true;
+                selected.userData.cube.material.color = {r: 1, g: 1, b: 0};
             }
             else
             {
                 selected = intersects[0].object.userData.model;
                 selected.userData.cube.material.visible = true;
+                selected.userData.cube.material.color = {r: 1, g: 1, b: 0};
             }
             
         }
-        else if (selected!= null)
+        else if (selected != null)
         {
             selected.userData.cube.material.visible = false;
             selected = null;
@@ -316,8 +323,20 @@ function onDocumentMouseUp(event)
     else
     {
         lbm = false;
-        //selected.userData.cube.material.visible = false;
-        //selected = null;
+
+        if (intersectionObj == true)
+        {
+            selected.position.copy(pastPos);
+            selected.userData.box.setFromObject(selected);
+            var pos = new THREE.Vector3();
+            selected.userData.box.getCenter(pos);
+            selected.userData.obb.position.copy(pos);
+            selected.userData.cube.position.copy(pos);
+
+            crossedObj.material.visible = false;
+
+            intersectionObj = false;
+        }
     }
 }
 
@@ -380,10 +399,12 @@ function onDocumentMouseMove(event)
     {   
         if ( intersects.length > 0)
         {
+            //pastPos.copy(selected.position);
+            //console.log(pastPos);
             if (selected != null && lbm == true)
             {
                 selected.position.copy(intersects[0].point);
-
+                
                 selected.userData.box.setFromObject(selected);
                 var pos = new THREE.Vector3();
                 selected.userData.box.getCenter(pos);
@@ -400,10 +421,10 @@ function onDocumentMouseMove(event)
                         {
                             objectList[i].material.color = {r: 1, g: 0, b: 0};
                             objectList[i].material.visible = true;
-                            //selected.userData.obb.material.color = 0x00ff0000;
+                            intersectionObj = true;
+                            crossedObj = objectList[i];
                         }
                     }
-                    
                 }
             }
         }
@@ -422,7 +443,6 @@ function onDocumentMouseScroll(event)
 
         circle.scale.set(radius, 1, radius);
     }
-    
 }
 
 function SphereBrush(dir, delta)
@@ -446,6 +466,22 @@ function SphereBrush(dir, delta)
     geometry.computeVertexNormals(); //пересчёт нормалей
     geometry.verticesNeedUpdate = true; //обновление вершин
     geometry.normalsNeedUpdate = true; //обновление нормалей
+
+    { // нереальный флекс
+        //if (objectList != null)
+        {
+            //for (var i = 0; i < objectList.length; i++)
+            {
+                //objectList[i].position.y = CalcHeight(objectList[i].position.x, objectList[i].position.y);
+                //objectList[i].userData.model.position.y = CalcHeight(objectList[i].position.x, objectList[i].position.y);
+                //objectList[i].userData.model.userData.box.setFromObject(objectList[i]);
+                //var pos = new THREE.Vector3();
+                //objectList[i].userData.model.userData.box.getCenter(pos);
+                //objectList[i].userData.model.userData.obb.position.copy(pos);
+                //objectList[i].userData.model.userData.cube.position.copy(pos);
+            }
+        }
+    }
 }
 
 function Gui()
@@ -453,12 +489,11 @@ function Gui()
     //массив переменных, ассоциированных с интерфейсом
     var params =
     {
-        sx: 0, sy: 0, sz: 0,
+        sx: 1, sy: 1, sz: 1, rx: 0,
         brush: false,
         AddPalm: function() { AddMesh('palm') },
         AddFence: function() { AddMesh('fence') },
-        AddHouse: function() { AddMesh('house') },
-        Delete: function() { DelMesh() }
+        AddHouse: function() { AddMesh('house') }
     };
     //создание вкладки
     var folder1 = gui.addFolder('Scale');
@@ -467,16 +502,86 @@ function Gui()
     //в окне интерфейса они будут представлены в виде слайдера
     //минимальное значение - 1, максимальное – 100, шаг – 1
     //listen означает, что изменение переменных будет отслеживаться
-    var meshSX = folder1.add( params, 'sx' ).min(1).max(100).step(1).listen();
-    var meshSY = folder1.add( params, 'sy' ).min(1).max(100).step(1).listen();
-    var meshSZ = folder1.add( params, 'sz' ).min(1).max(100).step(1).listen();
+    var meshSX = folder1.add( params, 'sx' ).min(0.5).max(2).step(0.1).listen();
+    var meshSY = folder1.add( params, 'sy' ).min(0.5).max(2).step(0.1).listen();
+    var meshSZ = folder1.add( params, 'sz' ).min(0.5).max(2).step(0.1).listen();
+    var rotX = folder1.add( params, 'rx' ).min(-180).max(180).step(1).listen();
     //при запуске программы папка будет открыта
     folder1.open();
 
     //описание действий совершаемых при изменении ассоциированных значений
-    //meshSX.onChange(function(value) { });
-    //meshSY.onChange(function(value) { });
-    //meshSZ.onChange(function(value) { });
+    meshSX.onChange(function(value)
+    {
+        if (selected != null)
+        {
+            selected.scale.set(value, params.sy, params.sz);
+
+            var size = new THREE.Vector3();
+            selected.userData.box.setFromObject(selected);
+            selected.userData.box.getSize(size);
+            selected.userData.cube.scale.set(size.x, size.y, size.z);
+            selected.userData.box.getSize(selected.userData.obb.halfSize).multiplyScalar(0.5);
+
+            var pos = new THREE.Vector3();
+            selected.userData.box.getCenter(pos);
+            selected.userData.obb.position.copy(pos);
+            selected.userData.cube.position.copy(pos);
+        }
+    });
+
+    meshSY.onChange(function(value)
+    {
+        if (selected != null)
+        {
+            selected.scale.set(params.sx, value, params.sz);
+
+            var size = new THREE.Vector3();
+            selected.userData.box.setFromObject(selected);
+            selected.userData.box.getSize(size);
+            selected.userData.cube.scale.set(size.x, size.y, size.z);
+            selected.userData.box.getSize(selected.userData.obb.halfSize).multiplyScalar(0.5);
+
+            var pos = new THREE.Vector3();
+            selected.userData.box.getCenter(pos);
+            selected.userData.obb.position.copy(pos);
+            selected.userData.cube.position.copy(pos);
+        }
+    });
+
+    meshSZ.onChange(function(value)
+    {
+        if (selected != null)
+        {
+            selected.scale.set(params.sx, params.sy, value);
+
+            var size = new THREE.Vector3();
+            selected.userData.box.setFromObject(selected);
+            selected.userData.box.getSize(size);
+            selected.userData.cube.scale.set(size.x, size.y, size.z);
+            selected.userData.box.getSize(selected.userData.obb.halfSize).multiplyScalar(0.5);
+
+            var pos = new THREE.Vector3();
+            selected.userData.box.getCenter(pos);
+            selected.userData.obb.position.copy(pos);
+            selected.userData.cube.position.copy(pos);
+        }
+    });
+
+    rotX.onChange(function(value)
+    {
+        if (selected!=null)
+        {
+            selected.rotation.y = value/36;
+            selected.userData.box.setFromObject(selected);
+            
+            selected.userData.cube.rotation.y = value/36;
+
+            var pos = new THREE.Vector3();
+            selected.userData.box.getCenter(pos);
+            selected.userData.obb.position.copy(pos);
+            selected.userData.cube.position.copy(pos);
+        }
+    });
 
     //добавление чек бокса с именем brush
     var cubeVisible = gui.add( params, 'brush' ).name('brush').listen();
@@ -494,8 +599,6 @@ function Gui()
     gui.add( params, 'AddPalm' ).name( "add palm" );
     gui.add( params, 'AddFence' ).name( "add fence" );
     gui.add( params, 'AddHouse' ).name( "add house" );
-    
-    gui.add( params, 'Delete' ).name( "delete object" );
 
     //при запуске программы интерфейс будет раскрыт
     gui.open();
@@ -539,7 +642,7 @@ function LoadStaticModel(path, oname, mname, s, name)
                     child.castShadow = true;
                     child.parent = object;
                 }
-            } );
+            });
 
             object.parent = object;
 
@@ -562,70 +665,85 @@ function LoadStaticModel(path, oname, mname, s, name)
 
 function AddMesh(name)
 {
-    var model = models.get(name).clone();
+    if (brushVisible == false)
+    {
+        var model = models.get(name).clone();
 
-    var box = new THREE.Box3();
+        var x = Math.random() * N;
+        var z = Math.random() * N;
+        var y = CalcHeight(x, z);
 
-    box.setFromObject(model);
+        model.position.x = x;
+        model.position.y = y;
+        model.position.z = z;
 
-    model.userData.box = box;
+        var box = new THREE.Box3();
 
-    var geometry = new THREE.BoxGeometry(1, 1, 1);
-    var material = new THREE.MeshBasicMaterial({color: 0xffff00, wireframe: true});
-    var cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+        box.setFromObject(model);
 
-    //скрытие объекта
-    cube.material.visible = false;
+        model.userData.box = box;
 
-    //получение позиции центра объекта
-    var pos = new THREE.Vector3();
-    box.getCenter(pos);
-    //получение размеров объекта
-    var size = new THREE.Vector3();
-    box.getSize(size);
+        var geometry = new THREE.BoxGeometry(1, 1, 1);
+        var material = new THREE.MeshBasicMaterial({color: 0xffff00, wireframe: true});
+        var cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
 
-    // когда будет реализован попворот, этот базис нужно будет обновлять
-    //cube.basis.extractRotation(model.matrixWorld);
+        //скрытие объекта
+        cube.material.visible = false;
 
-    //установка позиции и размера объекта в куб
-    cube.position.copy(pos);
-    cube.scale.set(size.x, size.y, size.z);
+        //получение позиции центра объекта
+        var pos = new THREE.Vector3();
+        box.getCenter(pos);
+        //получение размеров объекта
+        var size = new THREE.Vector3();
+        box.getSize(size);
 
-    model.userData.cube = cube;
-    cube.userData.model = model;
+        // когда будет реализован попворот, этот базис нужно будет обновлять
+        //cube.basis.extractRotation(model.matrixWorld);
 
-    //структура состоит из матрицы поворота, позиции и половины размера
-    var obb = {
-        basis: new THREE.Matrix4(),
-        halfSize: new THREE.Vector3(),
-        position: new THREE.Vector3()
-    };
+        //установка позиции и размера объекта в куб
+        cube.position.copy(pos);
+        cube.scale.set(size.x, size.y, size.z);
 
-    //получение позиции центра объекта
-    box.getCenter(obb.position);
-    //получение размеров объекта
-    box.getSize(obb.halfSize).multiplyScalar(0.5);
-    //получение матрицы поворота объекта
-    obb.basis.extractRotation(model.matrixWorld);
+        model.userData.cube = cube;
+        cube.userData.model = model;
 
-    model.userData.obb = obb;
+        //структура состоит из матрицы поворота, позиции и половины размера
+        var obb = {
+            basis: new THREE.Matrix4(),
+            halfSize: new THREE.Vector3(),
+            position: new THREE.Vector3()
+        };
 
-    objectList.push(cube);
-    scene.add(model);
+        //получение позиции центра объекта
+        box.getCenter(obb.position);
+        //получение размеров объекта
+        box.getSize(obb.halfSize).multiplyScalar(0.5);
+        //получение матрицы поворота объекта
+        obb.basis.extractRotation(model.matrixWorld);
+
+        model.userData.obb = obb;
+
+        objectList.push(cube);
+        scene.add(model);
+    }
 }
 
-function DelMesh(name)
+function CalcHeight(x, z)
 {
-    //поиск индекса эллемента selected в массиве objectList
-    //var ind = objectList.indexOf(selected);
+    return geometry.vertices[Math.round(z) + Math.round(x) * N].y;
+}
 
-    //если такой индекс существует, удаление одного эллемента из массива
-    //if (~ind)
-        //objectList.splice(ind, 1);
-
-    //удаление из сцены объекта, на который ссылается selected
-    //scene.remove(selected);
+function sss(name)
+{
+    var ind = objectList.indexOf(selected);
+    if (~ind)
+        objectList.splice(ind, 1);
+    scene.remove(selected.userData.box);
+    //delete selected.userData.obb;
+    scene.remove(selected.userData.cube);
+    //scene.remove(selected.userData.obb);
+    scene.remove(selected);
 }
 
 function Intersect(ob1, ob2)
