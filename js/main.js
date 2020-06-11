@@ -44,6 +44,8 @@ var spriteArr  = [];
 var sprite  = null;
 var sprtY = 0;
 
+
+
 // Функции инициализации и изменения объектов
 init();
 animate();
@@ -119,8 +121,8 @@ function init()
     AddCursor3D();
     Gui();
 
-    LoadStaticModel('models/static/Palm/', 'Palma 001.obj', 'Palma 001.mtl', 0.15, 'palm');
-    LoadStaticModel('models/static/Fence/', 'grade.obj', 'grade.mtl', 0.5, 'fence');
+    LoadStaticModel('models/static/Palm/', 'Bush1.obj', 'Bush1.mtl', 1, 'palm');
+    LoadStaticModel('models/static/Fence/', 'grade.obj', 'grade.mtl', 1, 'fence');
     LoadStaticModel('models/static/House/', 'Cyprys_House.obj', 'Cyprys_House.mtl', 1, 'house');
 
 
@@ -475,6 +477,7 @@ function onDocumentMouseMove(event)
             //console.log(pastPos);
             if (selected != null && lbm == true)
             {
+
                 selected.position.copy(intersects[0].point);
                 
                 selected.userData.box.setFromObject(selected);
