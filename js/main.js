@@ -44,8 +44,8 @@ var spriteArr  = [];
 var sprite  = null;
 var sprtY = 0;
 
-var g = new THREE.Vector3(0, -9,8, 0);
-var wind = new THREE.Vector3(15, 0, 0);
+var g = new THREE.Vector3(0, -9.8, 0);
+var wind = new THREE.Vector3(0, 0, 0);
 var particles = [];
 const MAX_PARTICLES = 50000;
 const PATRICLES_PER_SECOND = 1000;
@@ -571,13 +571,14 @@ function Gui()
     {
         sx: 1, sy: 1, sz: 1, rx: 0,
         brush: false,
-        rain: false,
+        rain: false, wX: 0, wZ: 0,
         AddPalm: function() { AddMesh('palm') },
         AddFence: function() { AddMesh('fence') },
         AddHouse: function() { AddMesh('house') }
     };
     //создание вкладки
     var folder1 = gui.addFolder('Scale');
+    var folder2 = gui.addFolder('Wind');
 
     //ассоциирование переменных отвечающих за масштабирование
     //в окне интерфейса они будут представлены в виде слайдера
@@ -702,10 +703,25 @@ function Gui()
         circle.visible = value;
     });
 
-    var rainVis = gui.add(params, 'rain').name('rain').listen();
+    var windX = folder2.add( params, 'wX' ).min(-24).max(24).step(2).listen();
+    var windZ = folder2.add( params, 'wZ' ).min(-24).max(24).step(2).listen();
+
+    folder2.open();
+
+    var rainVis = folder2.add(params, 'rain').name('rain').listen();
     rainVis.onChange(function(value)
     {
         rainVisible = value;    
+    });
+
+    windX.onChange(function(value)
+    {
+        wind.x = value;
+    });
+
+    windZ.onChange(function(value)
+    {
+        wind.z = value;
     });
 
     //добавление кнопок, при нажатии которых будут вызываться функции addMesh
@@ -1192,9 +1208,9 @@ function Emitter(delta)
             if (particles.length < MAX_PARTICLES)
             {
                 var x = Math.random()*N;
-                var z = Math.random()*N - 150;
+                var z = Math.random()*N;
 
-                var lifetime = (Math.random()*2) + 2;
+                var lifetime = (Math.random()*2) + 3;
 
                 var pos = new THREE.Vector4(x, 150, z);
                 var particle = AddRain(spriteMat, pos, lifetime);
