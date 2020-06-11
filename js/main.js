@@ -477,7 +477,6 @@ function onDocumentMouseMove(event)
             //console.log(pastPos);
             if (selected != null && lbm == true)
             {
-
                 selected.position.copy(intersects[0].point);
                 
                 selected.userData.box.setFromObject(selected);
@@ -646,15 +645,41 @@ function Gui()
     {
         if (selected!=null)
         {
-            selected.rotation.y = value/36;
+            var pastRot = new THREE.Euler();
+            pastRot.copy(selected.rotation);
+
+            //selected.rotation.y = value/36;
+            selected.userData.cube.rotation.set(0, (Math.PI/180)*value, 0);
+            selected.rotation.set(0, (Math.PI)/180*value, 0);
             selected.userData.box.setFromObject(selected);
             
-            selected.userData.cube.rotation.y = value/36;
+            selected.userData.obb.basis.extractRotation(selected.matrixWorld);
+
+            //selected.userData.cube.rotation.y = value/36;
 
             var pos = new THREE.Vector3();
             selected.userData.box.getCenter(pos);
             selected.userData.obb.position.copy(pos);
             selected.userData.cube.position.copy(pos);
+
+            for (var i = 0; i < objectList.length; i++)
+            {
+                if (selected.userData.cube != objectList[i])
+                {
+                    objectList[i].userData.cube.material.visible = false;
+
+                    if (Intersect(selected.userData, objectList[i].userData) == true)
+                    {
+                        objectList[i].userData.cube.material.visible = true;
+                        selected.rotation.copy(pastRot);
+
+                        selected.userData.cube.rotation.copy(pastRot);
+                        selected.userData.box.setFromObject(selected);
+
+                        selected.userData.obb.basis.extractRotation(selected.matrixWorld);
+                    }
+                }
+            }
         }
     });
 
