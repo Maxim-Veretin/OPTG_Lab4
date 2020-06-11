@@ -2,6 +2,12 @@
 var container;
 // Переменные "камера", "сцена" и "отрисовщик"
 var camera, scene, renderer;
+var cameraOrtho, sceneOrtho;
+
+
+// Создание загрузчика текстур
+var loader = new THREE.TextureLoader();
+
 var N = 100;
 var cameraDefaultPos = new THREE.Vector3(N/2, N/2, N*1.5);
 var cameraDefaultLook = new THREE.Vector3(N/2, 0, N/2);
@@ -34,6 +40,10 @@ var crossedObj = null;
 var pastPos = new THREE.Vector3(0,0,0);
 var intersectionObj = false;
 
+var spriteArr  = [];
+var sprite  = null;
+var sprtY = 0;
+
 // Функции инициализации и изменения объектов
 init();
 animate();
@@ -44,6 +54,15 @@ function init()
     // Получение ссылки на элемент html страницы
     container = document.getElementById( 'container' );
     scene = new THREE.Scene();
+
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+
+    sceneOrtho = new THREE.Scene();
+
+    cameraOrtho = new THREE.OrthographicCamera( -width /2, width /2, height /2,
+                                                -height /2, 1, 10 );
+    cameraOrtho.position.z = 10;
     // Установка параметров камеры
     // 45 - угол обзора
     // window.innerWidth / window.innerHeight - соотношение сторон
@@ -55,7 +74,7 @@ function init()
 
     // Создание отрисовщика
     renderer = new THREE.WebGLRenderer( { antialias: false } );
-    renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.setSize( window.innerWidth-30, window.innerHeight-30 );
     renderer.setClearColor(0x7fc7ff, 1);
 
     renderer.shadowMap.enabled = true;
@@ -85,6 +104,8 @@ function init()
     //добавление источника в сцену
     scene.add(light);
 
+    renderer.autoClear = false;
+
     renderer.domElement.addEventListener('mousedown',onDocumentMouseDown,false);
     renderer.domElement.addEventListener('mouseup',onDocumentMouseUp,false);
     renderer.domElement.addEventListener('mousemove',onDocumentMouseMove,false);
@@ -101,6 +122,13 @@ function init()
     LoadStaticModel('models/static/Palm/', 'Palma 001.obj', 'Palma 001.mtl', 0.15, 'palm');
     LoadStaticModel('models/static/Fence/', 'grade.obj', 'grade.mtl', 0.5, 'fence');
     LoadStaticModel('models/static/House/', 'Cyprys_House.obj', 'Cyprys_House.mtl', 1, 'house');
+
+
+    AddButtons();
+    //sprite = AddSprite('house');
+    //sprtBtn.push(AddSprite("bush"));
+    //sprtBtn.push(AddSprite("fence"));
+    //sprtBtn.push(AddSprite("house"));
 }
 
 function animate()
@@ -124,13 +152,31 @@ function onWindowResize()
     // Изменение соотношения сторон для виртуальной камеры
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+
+    cameraOrtho.left = -window.innerWidth/2;
+    cameraOrtho.right = window.innerWidth/2;
+    cameraOrtho.top = window.innerHeight/2;
+    cameraOrtho.bottom = -window.innerHeight/2;
+    cameraOrtho.updateProjectionMatrix();
+
+    if (spriteArr != 0)
+    {
+        for (var i = 0; i < spriteArr.length; i++)
+        {
+            updateHUDSprites(spriteArr[i]);
+        }
+    }
+    
     // Изменение соотношения сторон рендера
     renderer.setSize( window.innerWidth, window.innerHeight );
 }
 
 function render()
 {
+    renderer.clear();
     renderer.render( scene, camera );
+    renderer.clearDepth();
+    renderer.render( sceneOrtho, cameraOrtho );
 }
 
 function CreateGround()
@@ -170,8 +216,6 @@ function CreateGround()
     geometry.computeFaceNormals();
     geometry.computeVertexNormals();
 
-    // Создание загрузчика текстур
-    var loader = new THREE.TextureLoader();
     // Загрузка текстуры grasstile.jpg из папки pics
     var tex = loader.load( 'textures/grasstile.jpg' );
     
@@ -324,6 +368,20 @@ function onDocumentMouseUp(event)
     {
         lbm = false;
 
+        var mPos = {
+            x: event.clientX - window.innerWidth/2,
+            y: event.clientY + window.innerHeight/2
+            //y: (window.innerHeight/2) - event.clientY
+        }
+        //console.log(mPos.x+" "+mPos.y);
+        //console.log(event.clientX + " " + event.clientY);
+    
+        if (spriteArr != null)
+        {
+            for (var i = 0; i < spriteArr.length; i++)
+                ClickButton(mPos, spriteArr[i]);
+        }
+
         if (intersectionObj == true)
         {
             selected.position.copy(pastPos);
@@ -342,6 +400,20 @@ function onDocumentMouseUp(event)
 
 function onDocumentMouseMove(event)
 {
+    var mPos = {
+        x: event.clientX - window.innerWidth/2,
+        y: event.clientY + window.innerHeight/2
+        //y: (window.innerHeight/2) - event.clientY
+    }
+    //console.log(mPos.x+" "+mPos.y);
+    //console.log(event.clientX + " " + event.clientY);
+
+    if (spriteArr != null)
+    {
+        for ( var i = 0; i < spriteArr.length; i++)
+            MouseOverButton(mPos, spriteArr[i]);
+    }
+    
     //определение позиции мыши
     mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
     mouse.y = -( event.clientY / window.innerHeight ) * 2 + 1;
@@ -604,7 +676,6 @@ function Gui()
     gui.open();
 }
 
-// load static model
 function LoadStaticModel(path, oname, mname, s, name)
 {
     // функция, выполняемая в процессе загрузки модели (выводит процент загрузки)
@@ -919,4 +990,120 @@ function Intersect(ob1, ob2)
     }
     // no separating axis exists, so the two OBB don't intersect
     return true;
+}
+
+//функция для создания спрайта
+function AddSprite(name1, name2)
+{
+    //загрузка текстуры спрайта
+    var texture1 = loader.load("textures/" + name1 + ".jpg");
+    var texture2 = loader.load("textures/" + name2 + ".jpg");
+    
+    var material1 = new THREE.SpriteMaterial( { map: texture1 } );
+    var material2 = new THREE.SpriteMaterial( { map: texture2 } );
+
+    //создание спрайта
+    var sprite = new THREE.Sprite(material1);
+    //центр и размер спрайта
+    sprite.center.set( 0.0, 1.0 );
+    sprite.scale.set( 80, 64, 1 );
+    //sprite.position.set(-width, height, 1);
+
+    sceneOrtho.add(sprite);
+    updateHUDSprites(sprite);
+        
+    var SSprite = {
+        sprite: sprite,
+        mat1: material1,
+        mat2: material2,
+        click: SqrtClick,
+        nm: name1
+    }
+
+    return SSprite;
+}
+
+//функция для обновления позиции спрайтов
+function updateHUDSprites(sprite)
+{
+    var width = window.innerWidth/2;
+    var height = window.innerHeight/2;
+    
+    if (sprtY != 192)
+    {
+        // левый верхний угол экрана
+        sprite.position.set( -width +  (sprtY), height, 1 );
+        sprtY += 80;
+        console.log(sprite.position.x + " " + sprite.position.y);
+    }
+    else
+        sprtY = 0; 
+}
+
+function AddButtons()
+{
+    spriteArr.push(AddSprite('house', 'house2'));
+    spriteArr.push(AddSprite('bush', 'bush2'));
+    spriteArr.push(AddSprite('fence', 'fence2'));
+    
+    //console.log("//////////////////////////////////////////////");
+    //console.log(spriteArr[0].position.x + " " + spriteArr[0].position.y);
+    //console.log(spriteArr[1].position.x + " " + spriteArr[1].position.y);
+    //console.log(spriteArr[2].position.x + " " + spriteArr[2].position.y);
+    //console.log("//////////////////////////////////////////////");
+}
+
+function MouseOverButton(mousePos, sprite)
+{
+    var px = sprite.sprite.position.x;
+    var py = sprite.sprite.position.y;
+    var sx = px + sprite.sprite.scale.x;
+    var sy = py + sprite.sprite.scale.y;
+    //var sy = py - sprite.sprite.scale.y;
+    
+    //console.log(mousePos.x + " " + mousePos.y);
+    //console.log(sprite.sprite.position.x + " " + sprite.sprite.position.y)
+
+    if (mousePos.x > px && mousePos.x < sx)
+    {
+        if (mousePos.y > py && mousePos.y < sy)
+        {
+            sprite.sprite.material = sprite.mat2;
+        }
+        else
+            sprite.sprite.material = sprite.mat1;
+    }
+    else
+    {
+        sprite.sprite.material = sprite.mat1;
+    }
+}
+
+function ClickButton(mousePos, sprite)
+{
+    var px = sprite.sprite.position.x;
+    var py = sprite.sprite.position.y;
+    var sx = px + sprite.sprite.scale.x;
+    var sy = py + sprite.sprite.scale.y;
+    //var sy = py - sprite.sprite.scale.y;
+    
+    //console.log(mousePos.x + " " + mousePos.y);
+
+    if (mousePos.x > px && mousePos.x < sx)
+    {
+        if (mousePos.y > py && mousePos.y < sy)
+        {
+            sprite.click(sprite.nm);
+        }
+    }
+}
+
+function SqrtClick(name)
+{
+    if (name == 'house')
+        AddMesh('house');
+    else if (name == 'bush')
+        AddMesh('palm');
+    else if (name == 'fence')
+        AddMesh('fence');
 }
