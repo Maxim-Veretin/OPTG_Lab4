@@ -44,7 +44,13 @@ var spriteArr  = [];
 var sprite  = null;
 var sprtY = 0;
 
-
+var g = new THREE.Vector3(0, -9,8, 0);
+var wind = new THREE.Vector3(15, 0, 0);
+var particles = [];
+const MAX_PARTICLES = 50000;
+const PATRICLES_PER_SECOND = 1000;
+var spriteMat = null;
+var rainVisible = false;
 
 // Функции инициализации и изменения объектов
 init();
@@ -127,10 +133,7 @@ function init()
 
 
     AddButtons();
-    //sprite = AddSprite('house');
-    //sprtBtn.push(AddSprite("bush"));
-    //sprtBtn.push(AddSprite("fence"));
-    //sprtBtn.push(AddSprite("house"));
+    spriteMat = CreateSpriteMaterial('gachiBASS');
 }
 
 function animate()
@@ -145,6 +148,9 @@ function animate()
         SphereBrush(brushDirection, delta*15);
     }
 
+    Emitter(delta);
+
+    //console.log(particles.length);
     requestAnimationFrame( animate );
     render();
 }
@@ -565,6 +571,7 @@ function Gui()
     {
         sx: 1, sy: 1, sz: 1, rx: 0,
         brush: false,
+        rain: false,
         AddPalm: function() { AddMesh('palm') },
         AddFence: function() { AddMesh('fence') },
         AddHouse: function() { AddMesh('house') }
@@ -579,7 +586,7 @@ function Gui()
     var meshSX = folder1.add( params, 'sx' ).min(0.5).max(2).step(0.1).listen();
     var meshSY = folder1.add( params, 'sy' ).min(0.5).max(2).step(0.1).listen();
     var meshSZ = folder1.add( params, 'sz' ).min(0.5).max(2).step(0.1).listen();
-    var rotX = folder1.add( params, 'rx' ).min(-180).max(180).step(1).listen();
+    var rotX = folder1.add( params, 'rx' ).min(-180).max(180).step(10).listen();
     //при запуске программы папка будет открыта
     folder1.open();
 
@@ -638,6 +645,8 @@ function Gui()
             selected.userData.box.getCenter(pos);
             selected.userData.obb.position.copy(pos);
             selected.userData.cube.position.copy(pos);
+
+            console.log(selected.userData.cube);
         }
     });
 
@@ -685,13 +694,18 @@ function Gui()
 
     //добавление чек бокса с именем brush
     var cubeVisible = gui.add( params, 'brush' ).name('brush').listen();
-    
     cubeVisible.onChange(function(value)
     {
         // value принимает значения true и false
         brushVisible = value;
         cursor3D.visible = value;
         circle.visible = value;
+    });
+
+    var rainVis = gui.add(params, 'rain').name('rain').listen();
+    rainVis.onChange(function(value)
+    {
+        rainVisible = value;    
     });
 
     //добавление кнопок, при нажатии которых будут вызываться функции addMesh
@@ -1134,4 +1148,90 @@ function SqrtClick(name)
         AddMesh('palm');
     else if (name == 'fence')
         AddMesh('fence');
+}
+
+function CreateSpriteMaterial(name)
+{
+    //загрузка текстуры спрайта
+    var texture = loader.load("textures/" + name + ".png");
+    var material = new THREE.SpriteMaterial( { map: texture } );
+
+    return material;
+}
+
+function AddRain(mat, pos, t)
+{
+    //создание спрайта
+    var sprite = new THREE.Sprite(mat);
+    //центр и размер спрайта
+    sprite.center.set( 0.5, 0.5 );
+    sprite.scale.set( 1, 1, 1 );
+
+    sprite.position.copy(pos);
+
+    scene.add(sprite);
+        
+    var SSprite = {
+        sprite: sprite,
+        v: new THREE.Vector3(0, 0, 0),
+        m: (Math.random() * 0.1) + 0.01,
+        lifetime: t
+    }
+
+    return SSprite;
+}
+
+function Emitter(delta)
+{
+    var current_particles = Math.ceil(PATRICLES_PER_SECOND * delta);
+
+    if (rainVisible == true)
+    {
+        for (var i = 0; i < current_particles; i++)
+        {
+            if (particles.length < MAX_PARTICLES)
+            {
+                var x = Math.random()*N;
+                var z = Math.random()*N - 150;
+
+                var lifetime = (Math.random()*2) + 2;
+
+                var pos = new THREE.Vector4(x, 150, z);
+                var particle = AddRain(spriteMat, pos, lifetime);
+
+                particles.push(particle);
+            }
+        }
+    }
+
+    // pos = pos + (velocity + F + Fw; F = g*m)
+    for (var i = 0; i < particles.length; i++)
+    {
+        particles[i].lifetime -= delta;
+
+        if (particles[i].lifetime <= 0)
+        {
+            scene.remove(particles[i].sprite);
+            particles.splice(i, 1);
+
+            continue;
+        }
+
+        var gs = new THREE.Vector3();
+        gs.copy(g);
+        gs.multiplyScalar(particles[i].m);
+        gs.multiplyScalar(delta);
+        particles[i].v.add(gs);
+
+        var v = new THREE.Vector3(0, 0, 0);
+        var w = new THREE.Vector3(0, 0, 0);
+
+        w.copy(wind);
+        w.multiplyScalar(delta);
+
+        v.copy(particles[i].v);
+        v.add(w);
+
+        particles[i].sprite.position.add(v);
+    }
 }
